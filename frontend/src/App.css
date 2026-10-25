@@ -1,0 +1,73 @@
+#root { min-height: 100vh; }
+
+.app-shell { min-height: 100vh; padding: 0 28px 24px; background: #111310; }
+.topbar { display: flex; height: 66px; align-items: center; gap: 28px; border-bottom: 1px solid #292c26; }
+.brand { color: #eeeee6; text-decoration: none; font-family: Georgia, 'Times New Roman', serif; font-size: 22px; font-weight: 700; letter-spacing: -.07em; }
+.brand span { color: #b8c88a; }
+.project-name { display: flex; align-items: center; gap: 9px; color: #d6d7ce; font-size: 12px; }
+.project-indicator { width: 6px; height: 6px; border-radius: 50%; background: #b8c88a; }
+.topbar-label { margin-left: auto; color: #777b70; font-size: 11px; letter-spacing: .04em; }
+.workspace { display: grid; grid-template-columns: minmax(320px, 410px) minmax(0, 1fr); gap: 14px; max-width: 1600px; height: calc(100vh - 98px); min-height: 540px; margin: 16px auto 0; }
+.chat-panel, .preview-panel { min-width: 0; overflow: hidden; border: 1px solid #2b2e28; border-radius: 7px; background: #191b18; }
+.chat-panel { display: flex; flex-direction: column; }
+.panel-heading { display: flex; min-height: 74px; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid #2b2e28; background: #1b1d19; }
+.eyebrow { margin: 0 0 5px; color: #85897d; font-size: 9px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.panel-heading h1 { margin: 0; color: #e8e9e1; font-family: Georgia, 'Times New Roman', serif; font-size: 18px; font-weight: 400; letter-spacing: -.025em; }
+.file-count { display: flex; align-items: center; gap: 7px; color: #96998e; font-size: 10px; }
+.file-count-dot { width: 5px; height: 5px; border-radius: 1px; background: #72786a; }
+.conversation { display: flex; flex: 1; flex-direction: column; gap: 20px; overflow: auto; padding: 21px 18px; }
+.welcome-card { max-width: 300px; margin: auto 0; }
+.welcome-card h2 { margin: 0 0 8px; color: #ecece4; font-family: Georgia, 'Times New Roman', serif; font-size: 23px; font-weight: 400; letter-spacing: -.035em; }
+.welcome-card > p { margin: 0; color: #96998e; font-size: 11px; line-height: 1.75; }
+.suggestion { display: flex; align-items: center; gap: 10px; margin-top: 20px; padding: 9px 0; border: 0; color: #c1cc9d; background: transparent; text-align: left; font-size: 11px; }
+.suggestion span { color: #828878; transition: transform .15s; }
+.suggestion:hover span { transform: translate(2px, -2px); }
+.message { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 9px; animation: arrive .16s ease-out; }
+.message-author { padding-top: 3px; color: #82867b; font-size: 10px; }
+.message p { margin: 0; color: #d5d7cd; font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.message-user p { color: #f0f0e9; }
+.building-message p { display: flex; align-items: center; gap: 8px; color: #a7ab9c; }
+.loader { width: 10px; height: 10px; border: 1px solid #484d40; border-top-color: #bdca91; border-radius: 50%; animation: spin .8s linear infinite; }
+.composer { margin: 0 11px 11px; padding: 11px; border: 1px solid #353930; border-radius: 5px; background: #151713; transition: border-color .15s; }
+.composer:focus-within { border-color: #747d5d; }
+.composer textarea { display: block; width: 100%; min-height: 57px; max-height: 130px; resize: vertical; border: 0; outline: 0; color: #e7e8df; background: transparent; font-size: 12px; line-height: 1.65; }
+.composer textarea::placeholder { color: #70746a; }
+.composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 9px; border-top: 1px solid #2b2e28; }
+.composer-footer > span { display: flex; align-items: center; gap: 6px; color: #74786d; font-size: 9px; }
+.composer-footer > span i { width: 2px; height: 2px; border-radius: 50%; background: #666b60; }
+.send-button { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border: 1px solid #b7c489; border-radius: 4px; color: #1b1e16; background: #b7c489; font-size: 10px; font-weight: 600; transition: background .15s; }
+.send-button:hover:not(:disabled) { background: #c8d39f; }
+.send-button:disabled { border-color: #41463a; color: #777c6c; background: #2a2d25; }
+.send-button span { font-size: 13px; line-height: 10px; }
+.error-message { margin: 4px 0 8px; color: #df968a; font-size: 11px; line-height: 1.5; }
+
+.preview-panel { display: flex; flex-direction: column; background: #131511; }
+.preview-toolbar { display: flex; height: 43px; flex: 0 0 43px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px; border-bottom: 1px solid #2b2e28; background: #1a1c18; }
+.preview-heading { display: flex; align-items: center; gap: 8px; color: #d9dbd1; font-size: 11px; }
+.preview-live-dot { width: 6px; height: 6px; border-radius: 50%; background: #89966c; }
+.preview-address { margin-left: auto; color: #777b70; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
+.refresh-button { width: 27px; height: 27px; border: 1px solid transparent; border-radius: 4px; color: #a6a99d; background: transparent; font-size: 17px; }
+.refresh-button:hover { border-color: #3a3e34; color: #d0d6b3; background: #22251e; }
+.toolbar-spacer { width: 27px; }
+.preview-frame { width: 100%; height: 100%; flex: 1; border: 0; background: white; }
+.preview-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; padding: 28px; color: #e2e4d9; text-align: center; }
+.preview-empty h2 { margin: 0 0 7px; color: #e5e6dd; font-family: Georgia, 'Times New Roman', serif; font-size: 21px; font-weight: 400; }
+.preview-empty p { max-width: 260px; margin: 0; color: #85897d; font-size: 11px; line-height: 1.7; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes arrive { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 760px) {
+  .app-shell { padding: 0 12px 12px; }
+  .topbar { height: 56px; gap: 16px; }
+  .workspace { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; gap: 11px; margin-top: 11px; }
+  .chat-panel { height: min(62vh, 540px); min-height: 370px; }
+  .preview-panel { height: 56vh; min-height: 340px; }
+}
+
+@media (max-width: 420px) {
+  .project-name { font-size: 10px; }
+  .topbar-label { font-size: 10px; }
+  .composer-footer > span { font-size: 8px; }
+}

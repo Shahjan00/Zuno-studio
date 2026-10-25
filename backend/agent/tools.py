@@ -4,7 +4,9 @@ from typing import Tuple
 
 from langchain_core.tools import tool
 
-PROJECT_ROOT = pathlib.Path.cwd() / "generated_project"
+# Keep generated files in the backend workspace regardless of the process cwd
+# (for example, whether uvicorn is launched from the repository root or backend/).
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1] / "generated_project"
 
 
 def safe_path_for_project(path: str) -> pathlib.Path:
