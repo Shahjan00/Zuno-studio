@@ -17,17 +17,38 @@ type Conversation = {
   created_at: string
 }
 
+type OpenFile = {
+  path: string
+  content: string
+}
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  return `${(bytes / 1024).toFixed(1)} KB`
+}
+
+function formatDate(value: string) {
+  try {
+    return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  } catch {
+    return ''
+  }
+}
 
 function App() {
   const [prompt, setPrompt] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [files, setFiles] = useState<GeneratedFile[]>([])
   const [previewUrl, setPreviewUrl] = useState('')
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [conversationId, setConversationId] = useState<string | null>(null)
   const [isBuilding, setIsBuilding] = useState(false)
   const [error, setError] = useState('')
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [projectName, setProjectName] = useState('Untitled website')
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop')
+  const [selectedFile, setSelectedFile] = useState<OpenFile | null>(null)
   const conversationRef = useRef<HTMLDivElement>(null)
 
   async function refreshConversations() {
@@ -88,6 +109,7 @@ function App() {
 
       const newConversationId = (data.conversation_id as string | undefined) || conversationId
       if (newConversationId) setConversationId(newConversationId)
+      if (data.project) setProjectName(data.project as string)
       const generatedFiles = (data.files || []) as GeneratedFile[]
       setFiles(generatedFiles)
       setMessages((current) => [...current, { role: 'assistant', text: data.message || 'Your website is ready.' }])
@@ -112,6 +134,7 @@ function App() {
         throw new Error(data.detail || 'Could not open that conversation.')
       }
       setConversationId(data.id as string)
+      setProjectName((data.title as string) || 'Untitled website')
       setMessages(((data.messages || []) as { role: 'user' | 'assistant'; content: string }[]).map((message) => ({ role: message.role, text: message.content })))
       const generatedFiles = (data.files || []) as GeneratedFile[]
       setFiles(generatedFiles)
@@ -125,11 +148,34 @@ function App() {
 
   function newConversation() {
     setConversationId(null)
+    setProjectName('Untitled website')
     setMessages([])
     setFiles([])
     setPreviewUrl('')
     setError('')
     setPrompt('')
+  }
+
+  async function openFile(path: string) {
+    try {
+      const encoded = path.split('/').map(encodeURIComponent).join('/')
+      const url = conversationId
+        ? `${API_BASE_URL}/api/files/${encoded}?conversation_id=${conversationId}`
+        : `${API_BASE_URL}/api/files/${encoded}`
+      const response = await fetch(url)
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.detail || 'Could not open that file.')
+      }
+      setSelectedFile({ path, content: data.content as string })
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Could not open that file.'
+      setError(message)
+    }
+  }
+
+  function refreshPreview() {
+    setPreviewUrl(conversationId ? `${API_BASE_URL}/preview/${conversationId}/?refresh=${Date.now()}` : `${API_BASE_URL}/preview/?refresh=${Date.now()}`)
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -139,109 +185,163 @@ function App() {
     }
   }
 
+  const suggestions = [
+    { title: 'Photographer portfolio', prompt: 'Create a clean portfolio website for a photographer' },
+    { title: 'Coffee shop landing page', prompt: 'Build a landing page for a small coffee shop with a menu section' },
+    { title: 'AI engineer portfolio', prompt: 'Create a portfolio website for an AI engineer named Shahjan' },
+  ]
+
   return (
     <main className="app-shell">
-      <header className="topbar">
+      <aside className="sidebar">
         <a className="brand" href="/" aria-label="ZUNO home">zuno<span>.</span></a>
-        <div className="project-name"><span className="project-indicator" />Untitled website</div>
-        <span className="topbar-label">Web studio</span>
-      </header>
+        <button className="new-build" type="button" onClick={newConversation}>+ New build</button>
 
-      <section className="workspace" aria-label="Website builder">
-        <aside className="chat-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Project</p>
-              <h1>Conversation</h1>
-            </div>
-            <span className="file-count"><span className="file-count-dot" />{files.length} {files.length === 1 ? 'file' : 'files'}</span>
-          </div>
-
-          <div className="history">
-            <div className="history-header">
-              <span>Past builds</span>
-              <button className="history-new" type="button" onClick={newConversation}>+ New</button>
-            </div>
-            {conversations.length === 0 ? (
-              <p className="history-empty">No past builds yet.</p>
-            ) : (
-              conversations.map((conversation) => (
-                <button
-                  key={conversation.id}
-                  className={`history-item${conversation.id === conversationId ? ' history-item-active' : ''}`}
-                  type="button"
-                  onClick={() => void loadConversation(conversation.id)}
-                >
-                  {conversation.title}
-                </button>
-              ))
-            )}
-          </div>
-
-          <div className="conversation" ref={conversationRef} aria-live="polite">
-            {messages.length === 0 ? (
-              <div className="welcome-card">
-                <h2>Start with an idea.</h2>
-                <p>Describe a page you need. You can refine it with another message after it’s built.</p>
-                <button className="suggestion" onClick={() => setPrompt('Create a clean portfolio website for a photographer')}>
-                  Try a photographer portfolio <span>↗</span>
-                </button>
-              </div>
-            ) : (
-              messages.map((message, index) => (
-                <article className={`message message-${message.role}`} key={`${message.role}-${index}`}>
-                  <span className="message-author">{message.role === 'user' ? 'You' : 'Zuno'}</span>
-                  <p>{message.text}</p>
-                </article>
-              ))
-            )}
-            {isBuilding && (
-              <div className="message message-assistant building-message">
-                <span className="message-author">Zuno</span>
-                <p><span className="loader" /> Working on it…</p>
-              </div>
-            )}
-          </div>
-
-          <form className="composer" onSubmit={submitPrompt}>
-            <label className="sr-only" htmlFor="prompt">Describe a website or change</label>
-            <textarea
-              id="prompt"
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={handleComposerKeyDown}
-              placeholder="Describe a website or ask for a change…"
-              rows={3}
-              disabled={isBuilding}
-            />
-            {error && <p className="error-message">{error}</p>}
-            <div className="composer-footer">
-              <span>Enter to send <i /> Shift + Enter for a new line</span>
-              <button className="send-button" type="submit" disabled={!prompt.trim() || isBuilding}>
-                {isBuilding ? 'Building…' : 'Build'} <span aria-hidden="true">↑</span>
-              </button>
-            </div>
-          </form>
-        </aside>
-
-        <section className="preview-panel" aria-label="Website preview">
-          <div className="preview-toolbar">
-            <div className="preview-heading">Preview</div>
-            <div className="preview-address">/ generated site</div>
-            {previewUrl ? (
-              <button className="refresh-button" aria-label="Refresh preview" onClick={() => setPreviewUrl(conversationId ? `${API_BASE_URL}/preview/${conversationId}/?refresh=${Date.now()}` : `${API_BASE_URL}/preview/?refresh=${Date.now()}`)}>↻</button>
-            ) : <span className="toolbar-spacer" />}
-          </div>
-          {previewUrl ? (
-            <iframe key={previewUrl} className="preview-frame" src={previewUrl} title="Generated website preview" />
+        <div className="sidebar-section">
+          <p className="sidebar-label">Past builds</p>
+          {conversations.length === 0 ? (
+            <p className="sidebar-empty">No builds yet.</p>
           ) : (
-            <div className="preview-empty">
-              <h2>No preview yet</h2>
-              <p>Send a prompt and the generated website will appear here.</p>
-            </div>
+            conversations.map((conversation) => (
+              <button
+                key={conversation.id}
+                className={`sidebar-item${conversation.id === conversationId ? ' sidebar-item-active' : ''}`}
+                type="button"
+                onClick={() => void loadConversation(conversation.id)}
+              >
+                <span className="sidebar-item-title">{conversation.title}</span>
+                <span className="sidebar-item-date">{formatDate(conversation.created_at)}</span>
+              </button>
+            ))
           )}
-        </section>
+        </div>
+
+        <div className="sidebar-section sidebar-files">
+          <p className="sidebar-label">Files · {files.length}</p>
+          {files.length === 0 ? (
+            <p className="sidebar-empty">No files yet.</p>
+          ) : (
+            files.map((file) => (
+              <button key={file.path} className="sidebar-item file-item" type="button" onClick={() => void openFile(file.path)}>
+                <span className="sidebar-item-title">{file.path}</span>
+                <span className="sidebar-item-date">{formatSize(file.size)}</span>
+              </button>
+            ))
+          )}
+        </div>
+
+        <p className="sidebar-footer">zuno — AI website builder</p>
+      </aside>
+
+      <section className="main">
+        <header className="topbar">
+          <div className="project">
+            <span className="project-dot" />
+            <div>
+              <h1>{projectName}</h1>
+              <p>{conversationId ? 'Saved · click a past build to reopen it' : 'Describe a website and watch it build'}</p>
+            </div>
+          </div>
+          <span className="topbar-label">Web studio</span>
+        </header>
+
+        <div className="workspace">
+          <section className="chat-panel" aria-label="Conversation">
+            <div className="conversation" ref={conversationRef} aria-live="polite">
+              {messages.length === 0 ? (
+                <div className="welcome">
+                  <h2>What should we build?</h2>
+                  <p>Describe a page you need. You can refine it with another message after it’s built.</p>
+                  <div className="suggestions">
+                    {suggestions.map((suggestion) => (
+                      <button key={suggestion.title} className="suggestion-card" type="button" onClick={() => setPrompt(suggestion.prompt)}>
+                        <span className="suggestion-title">{suggestion.title}</span>
+                        <span className="suggestion-arrow">↗</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                messages.map((message, index) => (
+                  <article className={`message message-${message.role}`} key={`${message.role}-${index}`}>
+                    <span className={`avatar avatar-${message.role}`}>{message.role === 'user' ? 'S' : 'Z'}</span>
+                    <div className="message-body">
+                      <span className="message-author">{message.role === 'user' ? 'You' : 'Zuno'}</span>
+                      <p>{message.text}</p>
+                    </div>
+                  </article>
+                ))
+              )}
+              {isBuilding && (
+                <div className="message message-assistant building-message">
+                  <span className="avatar avatar-assistant">Z</span>
+                  <div className="message-body">
+                    <span className="message-author">Zuno</span>
+                    <p>Building your site<span className="dots"><i>.</i><i>.</i><i>.</i></span></p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <form className="composer" onSubmit={submitPrompt}>
+              <label className="sr-only" htmlFor="prompt">Describe a website or change</label>
+              <textarea
+                id="prompt"
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                onKeyDown={handleComposerKeyDown}
+                placeholder="Describe a website or ask for a change…"
+                rows={3}
+                disabled={isBuilding}
+              />
+              {error && <p className="error-message">{error}</p>}
+              <div className="composer-footer">
+                <span>Enter to send · Shift + Enter for a new line</span>
+                <button className="send-button" type="submit" disabled={!prompt.trim() || isBuilding} aria-label="Send">↑</button>
+              </div>
+            </form>
+          </section>
+
+          <section className="preview-panel" aria-label="Website preview">
+            <div className="preview-toolbar">
+              <div className="browser-dots" aria-hidden="true"><i /><i /><i /></div>
+              <div className="preview-address">{previewUrl ? 'zuno.preview' : 'No preview yet'}</div>
+              <div className="preview-actions">
+                <div className="preview-toggle" role="group" aria-label="Preview size">
+                  <button type="button" className={previewMode === 'desktop' ? 'active' : ''} onClick={() => setPreviewMode('desktop')}>Desktop</button>
+                  <button type="button" className={previewMode === 'mobile' ? 'active' : ''} onClick={() => setPreviewMode('mobile')}>Mobile</button>
+                </div>
+                <button className="icon-button" type="button" aria-label="Refresh preview" onClick={refreshPreview}>↻</button>
+                {previewUrl && (
+                  <a className="icon-button open-link" href={previewUrl} target="_blank" rel="noreferrer" aria-label="Open preview in a new tab">↗</a>
+                )}
+              </div>
+            </div>
+            <div className={`preview-frame-wrap preview-${previewMode}`}>
+              {previewUrl ? (
+                <iframe key={previewUrl} className="preview-frame" src={previewUrl} title="Generated website preview" />
+              ) : (
+                <div className="preview-empty">
+                  <h2>No preview yet</h2>
+                  <p>Send a prompt and the generated website will appear here.</p>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       </section>
+
+      {selectedFile && (
+        <div className="file-viewer-backdrop" onClick={() => setSelectedFile(null)}>
+          <div className="file-viewer" role="dialog" aria-label={selectedFile.path} onClick={(event) => event.stopPropagation()}>
+            <div className="file-viewer-header">
+              <span>{selectedFile.path}</span>
+              <button type="button" aria-label="Close file" onClick={() => setSelectedFile(null)}>✕</button>
+            </div>
+            <pre>{selectedFile.content}</pre>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
