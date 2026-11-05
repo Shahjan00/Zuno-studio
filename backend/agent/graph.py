@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from langchain_google_genai import  ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
@@ -6,6 +7,7 @@ from langgraph.graph import StateGraph, END
 from langchain.agents import create_agent
 from dotenv import load_dotenv
 import os
+from pydantic import BaseModel, Field
 
 from .prompts import *
 from .states import *
@@ -24,11 +26,57 @@ def debug_print(message: str) -> None:
 # llm = ChatGoogleGenerativeAI(model = "gemini-3.6-flash")
 
 llm = ChatGroq(
-    model="openai/gpt-oss-120b",
+    model="openai/gpt-oss-20b",
+    # model="llama-3.3-70b-versatile",
     temperature=0
 )
 
 #========================= NODES =============================
+
+class RouteDecision(BaseModel):
+    route: Literal["chat", "build"] = Field(description="Whether this prompt is a casual chat question or a build/create request.")
+    reason: str = Field(description="Very short explanation for the route decision.")
+
+
+def router_agent(state: dict) -> dict:
+    user_prompt = state.get("user_prompt", "")
+    classification_prompt = (
+        "You are a routing classifier. Decide whether the input is a short conversational message "
+        "or a request to build/create something.\n"
+        "- Use 'chat' for casual conversation, greetings, questions, or general help.\n"
+        "- Use 'build' for requests to make, create, generate, design, or code a website/app/project.\n"
+        f"User input: {user_prompt}"
+    )
+    debug_print(f"LLM call: router_agent -> classify prompt '{user_prompt}'")
+    response = llm.with_structured_output(RouteDecision).invoke(classification_prompt)
+    debug_print(f"Router classification: route={response.route}, reason={response.reason}")
+    return {
+        "route": response.route,
+        "user_prompt": user_prompt,
+    }
+
+
+def chat_agent(state: dict) -> dict:
+    user_prompt = state.get("user_prompt", "")
+
+    system_prompt = """
+You are Zuno, a helpful AI assistant.
+Rules:
+- Answer everyday questions directly and briefly.
+- If the user asks math, greetings, names, or general questions, answer clearly.
+- If the user asks to create/build a website or app, do not answer as a normal chat; instead ask for requirements or route to the build flow.
+- Be friendly and concise.
+"""
+
+    response = llm.invoke([
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ])
+
+    reply = response.content if hasattr(response, "content") else str(response)
+
+    return {"reply": reply, "status": "DONE"}
+
 
 def planner_agent(state : dict) -> dict :
     debug_print(f"Node planner_agent started with state keys={list(state.keys())}")
@@ -109,12 +157,20 @@ def coding_agent(state: dict) -> dict:
 
 graph = StateGraph(dict)
 
-graph.set_entry_point("planner")
+graph.set_entry_point("router")
+graph.add_node("router", router_agent)
+graph.add_node("chat", chat_agent)
 graph.add_node("planner", planner_agent)
 graph.add_node("architect", architect_agent)
 graph.add_node("coder", coding_agent)
 
 
+graph.add_conditional_edges(
+    source="router",
+    path=lambda s: "chat" if s.get("route") == "chat" else "planner",
+    path_map={"chat": "chat", "planner": "planner"}
+)
+graph.add_edge("chat", END)
 graph.add_edge("planner", "architect")
 graph.add_edge("architect", "coder")
 graph.add_conditional_edges(

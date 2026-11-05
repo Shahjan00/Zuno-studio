@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -82,6 +82,13 @@ def chat(request: ChatRequest) -> dict:
             detail="The build agent failed. Check the backend logs for details.",
         ) from exc
 
+    if result.get("reply"):
+        return {
+            "message": result["reply"],
+            "project": None,
+            "files": _list_project_files(),
+        }
+
     plan = result.get("plan")
     project_name = getattr(plan, "name", None)
     return {
@@ -115,6 +122,12 @@ def get_file(path: str) -> dict[str, str]:
 
 
 @app.get("/preview", include_in_schema=False)
+def preview_redirect():
+    """Keep preview URLs in a directory context so relative CSS/JS asset URLs resolve correctly."""
+    return RedirectResponse(url="/preview/", status_code=307)
+
+
+@app.get("/preview/", include_in_schema=False)
 def preview():
     """Serve the generated app's index.html for a preview iframe."""
     index_file = PROJECT_ROOT / "index.html"

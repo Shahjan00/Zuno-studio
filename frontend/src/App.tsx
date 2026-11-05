@@ -31,7 +31,7 @@ function App() {
       .then((generatedFiles) => {
         setFiles(generatedFiles)
         if (generatedFiles.some((file) => file.path === 'index.html')) {
-          setPreviewUrl(`${API_BASE_URL}/preview?refresh=${Date.now()}`)
+          setPreviewUrl(`${API_BASE_URL}/preview/?refresh=${Date.now()}`)
         }
       })
       .catch(() => {
@@ -68,7 +68,7 @@ function App() {
       setFiles(generatedFiles)
       setMessages((current) => [...current, { role: 'assistant', text: data.message || 'Your website is ready.' }])
       if (generatedFiles.some((file) => file.path === 'index.html')) {
-        setPreviewUrl(`${API_BASE_URL}/preview?refresh=${Date.now()}`)
+        setPreviewUrl(`${API_BASE_URL}/preview/?refresh=${Date.now()}`)
       }
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Could not reach the backend.'
@@ -155,7 +155,7 @@ function App() {
             <div className="preview-heading">Preview</div>
             <div className="preview-address">/ generated site</div>
             {previewUrl ? (
-              <button className="refresh-button" aria-label="Refresh preview" onClick={() => setPreviewUrl(`${API_BASE_URL}/preview?refresh=${Date.now()}`)}>↻</button>
+              <button className="refresh-button" aria-label="Refresh preview" onClick={() => setPreviewUrl(`${API_BASE_URL}/preview/?refresh=${Date.now()}`)}>↻</button>
             ) : <span className="toolbar-spacer" />}
           </div>
           {previewUrl ? (
