@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -11,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from agent.tools import PROJECT_ROOT, safe_path_for_project
-from app.db import init_db
+from app.db import init_db, new_conversation_id
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=10_000)
+    conversation_id: str | None = None
 
 
 class GeneratedFile(BaseModel):
@@ -49,12 +51,29 @@ class GeneratedFile(BaseModel):
     size: int
 
 
-def _list_project_files() -> list[GeneratedFile]:
-    if not PROJECT_ROOT.exists():
+_CONVERSATION_ID_RE = re.compile(r"[0-9a-f]{12}")
+
+
+def _valid_conversation_id(value: str) -> bool:
+    """Conversation ids are the 12 hex chars made by new_conversation_id."""
+    return _CONVERSATION_ID_RE.fullmatch(value) is not None
+
+
+def _conversation_dir(conversation_id: str) -> Path:
+    """Folder for one conversation's files: generated_project/<id>/."""
+    try:
+        return safe_path_for_project(conversation_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid conversation id.") from exc
+
+
+def _list_project_files(conversation_id: str | None = None) -> list[GeneratedFile]:
+    folder = _conversation_dir(conversation_id) if conversation_id else PROJECT_ROOT
+    if not folder.exists():
         return []
     return [
-        GeneratedFile(path=file.relative_to(PROJECT_ROOT).as_posix(), size=file.stat().st_size)
-        for file in sorted(PROJECT_ROOT.rglob("*"))
+        GeneratedFile(path=file.relative_to(folder).as_posix(), size=file.stat().st_size)
+        for file in sorted(folder.rglob("*"))
         if file.is_file()
     ]
 
@@ -71,12 +90,16 @@ def chat(request: ChatRequest) -> dict:
     if not prompt:
         raise HTTPException(status_code=422, detail="Prompt cannot be blank.")
 
+    conversation_id = request.conversation_id or new_conversation_id()
+    if not _valid_conversation_id(conversation_id):
+        raise HTTPException(status_code=422, detail="Invalid conversation id.")
+
     try:
         # Load the model-backed graph on demand so health checks and /docs work
         # before a provider key has been configured.
         from agent.graph import agent
 
-        result = agent.invoke({"user_prompt": prompt})
+        result = agent.invoke({"user_prompt": prompt, "conversation_id": conversation_id})
     except Exception as exc:
         # Keep provider errors and internal details in the server logs.
         logger.exception("Build agent failed")
@@ -89,7 +112,8 @@ def chat(request: ChatRequest) -> dict:
         return {
             "message": result["reply"],
             "project": None,
-            "files": _list_project_files(),
+            "files": _list_project_files(conversation_id),
+            "conversation_id": conversation_id,
         }
 
     plan = result.get("plan")
@@ -97,21 +121,27 @@ def chat(request: ChatRequest) -> dict:
     return {
         "message": f"Finished building {project_name}." if project_name else "Build complete.",
         "project": project_name,
-        "files": _list_project_files(),
+        "files": _list_project_files(conversation_id),
+        "conversation_id": conversation_id,
     }
 
 
 @app.get("/api/files", response_model=list[GeneratedFile])
-def list_files() -> list[GeneratedFile]:
+def list_files(conversation_id: str | None = None) -> list[GeneratedFile]:
     """List generated files, suitable for a file picker in the future UI."""
-    return _list_project_files()
+    if conversation_id and not _valid_conversation_id(conversation_id):
+        raise HTTPException(status_code=422, detail="Invalid conversation id.")
+    return _list_project_files(conversation_id)
 
 
 @app.get("/api/files/{path:path}")
-def get_file(path: str) -> dict[str, str]:
+def get_file(path: str, conversation_id: str | None = None) -> dict[str, str]:
     """Return one generated source file as text."""
+    if conversation_id and not _valid_conversation_id(conversation_id):
+        raise HTTPException(status_code=422, detail="Invalid conversation id.")
     try:
-        file_path = safe_path_for_project(path)
+        full_path = f"{conversation_id}/{path}" if conversation_id else path
+        file_path = safe_path_for_project(full_path)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid file path.") from exc
 
@@ -137,6 +167,27 @@ def preview():
     if not index_file.is_file():
         raise HTTPException(status_code=404, detail="No generated index.html yet.")
     return FileResponse(index_file)
+
+
+@app.get("/preview/{conversation_id}/", include_in_schema=False)
+def preview_conversation(conversation_id: str):
+    """Serve one conversation's generated index.html for a preview iframe."""
+    index_file = _conversation_dir(conversation_id) / "index.html"
+    if not index_file.is_file():
+        raise HTTPException(status_code=404, detail="No generated index.html yet.")
+    return FileResponse(index_file)
+
+
+@app.get("/preview/{conversation_id}/{path:path}", include_in_schema=False)
+def preview_conversation_asset(conversation_id: str, path: str):
+    """Serve one conversation's CSS/JS/assets for the preview iframe."""
+    try:
+        file_path = safe_path_for_project(f"{conversation_id}/{path}")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid file path.") from exc
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Generated file not found.")
+    return FileResponse(file_path)
 
 
 # Static assets referenced by the generated index.html (CSS, JS, images) also

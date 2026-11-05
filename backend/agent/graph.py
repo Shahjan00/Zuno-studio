@@ -166,8 +166,13 @@ def coding_agent(state: dict) -> dict:
     current_task = steps[coder_state.current_step_id]
     debug_print(f"Coding task: step={coder_state.current_step_id}, file={current_task.filepath}, task={current_task.task_description}")
 
-    existing_content = read_file.run(current_task.filepath)
-    debug_print(f"Read existing file content for {current_task.filepath}: {existing_content[:200] if existing_content else '<empty>'}")
+    # Each conversation has its own folder, so builds do not overwrite
+    # each other. The code block still says just the filename.
+    conversation_id = state.get("conversation_id")
+    target_path = f"{conversation_id}/{current_task.filepath}" if conversation_id else current_task.filepath
+
+    existing_content = read_file.run(target_path)
+    debug_print(f"Read existing file content for {target_path}: {existing_content[:200] if existing_content else '<empty>'}")
 
     # write_file is deliberately NOT a tool here anymore (see FIX 3 above).
     # read/list tools stay: their arguments are just a path, tiny and safe.
@@ -215,8 +220,8 @@ def coding_agent(state: dict) -> dict:
 
         if match is not None:
             # Deterministic write from Python, not from LLM tool-call JSON.
-            write_file.invoke({"path": current_task.filepath, "content": match[1]})
-            debug_print(f"Wrote {current_task.filepath} ({len(match[1])} chars)")
+            write_file.invoke({"path": target_path, "content": match[1]})
+            debug_print(f"Wrote {target_path} ({len(match[1])} chars)")
             break
 
         last_error = (
