@@ -87,9 +87,10 @@ Rules:
 def planner_agent(state : dict) -> dict :
     debug_print(f"Node planner_agent started with state keys={list(state.keys())}")
     user_prompt = state['user_prompt']
+    history = state.get('history', [])
     debug_print(f"LLM call: planner_agent -> with_structured_output(Plan) with prompt={user_prompt}")
     # JSON schema mode (same as router).
-    response = llm.with_structured_output(Plan, method="json_schema", strict=True).invoke(planner_prompt(user_prompt))
+    response = llm.with_structured_output(Plan, method="json_schema", strict=True).invoke(planner_prompt(user_prompt, history))
     debug_print(f"LLM response: planner_agent -> {response}")
 
     if response is None:

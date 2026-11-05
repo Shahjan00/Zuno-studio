@@ -1,9 +1,20 @@
-def planner_prompt(user_prompt : str) -> str:
+def planner_prompt(user_prompt : str, history: list | None = None) -> str:
+    history_text = ""
+    if history:
+        lines = []
+        for message in history:
+            who = "You" if message.get("role") == "user" else "Zuno"
+            lines.append(f"{who}: {str(message.get('content', ''))[:1000]}")
+        history_text = (
+            "\nPast conversation (most recent last):\n"
+            + "\n".join(lines)
+            + "\nThis is a follow-up: keep the existing website and only change what the user asked for. Do not rebuild it from scratch.\n"
+        )
     PLANNING_PROMPT = f"""
 You are the PLANNER agent. Convert the user prompt into a complete engineering project plan AND a design brief.
 
 User Request: {user_prompt}
-
+{history_text}
 RULES:
 - Treat words like "simple" as "clean and focused" — NEVER as "bare, unstyled, or empty".
 - Every website gets a full design system, even a one-section page. The architect only sees this plan, so if the design is not written here, it will not exist in the website:

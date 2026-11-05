@@ -100,6 +100,15 @@ def chat(request: ChatRequest) -> dict:
         if conversation is None:
             conversation = Conversation(id=conversation_id, title=prompt[:60])
             db.add(conversation)
+        # Past messages, before this one, so follow-ups make sense.
+        rows = (
+            db.query(Message)
+            .filter(Message.conversation_id == conversation_id)
+            .order_by(Message.id.desc())
+            .limit(10)
+            .all()
+        )
+        history = [{"role": row.role, "content": row.content} for row in reversed(rows)]
         db.add(Message(conversation_id=conversation_id, role="user", content=prompt))
         db.commit()
     finally:
@@ -110,7 +119,7 @@ def chat(request: ChatRequest) -> dict:
         # before a provider key has been configured.
         from agent.graph import agent
 
-        result = agent.invoke({"user_prompt": prompt, "conversation_id": conversation_id})
+        result = agent.invoke({"user_prompt": prompt, "conversation_id": conversation_id, "history": history})
     except Exception as exc:
         # Keep provider errors and internal details in the server logs.
         logger.exception("Build agent failed")
