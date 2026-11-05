@@ -28,7 +28,10 @@ def debug_print(message: str) -> None:
 llm = ChatGroq(
     model="openai/gpt-oss-20b",
     # model="llama-3.3-70b-versatile",
-    temperature=0
+    temperature=0,
+    # Give the model room to finish a whole file, so long
+    # contents do not get cut off mid-generation.
+    max_tokens=8192,
 )
 
 #========================= NODES =============================
@@ -48,7 +51,7 @@ def router_agent(state: dict) -> dict:
         f"User input: {user_prompt}"
     )
     debug_print(f"LLM call: router_agent -> classify prompt '{user_prompt}'")
-    response = llm.with_structured_output(RouteDecision).invoke(classification_prompt)
+    response = llm.with_structured_output(RouteDecision, method="json_mode").invoke(classification_prompt)
     debug_print(f"Router classification: route={response.route}, reason={response.reason}")
     return {
         "route": response.route,
@@ -82,7 +85,7 @@ def planner_agent(state : dict) -> dict :
     debug_print(f"Node planner_agent started with state keys={list(state.keys())}")
     user_prompt = state['user_prompt']
     debug_print(f"LLM call: planner_agent -> with_structured_output(Plan) with prompt={user_prompt}")
-    response = llm.with_structured_output(Plan).invoke(planner_prompt(user_prompt))
+    response = llm.with_structured_output(Plan, method="json_mode").invoke(planner_prompt(user_prompt))
     debug_print(f"LLM response: planner_agent -> {response}")
 
     if response is None:
@@ -96,7 +99,7 @@ def architect_agent(state : dict) -> dict:
     debug_print(f"Node architect_agent started with plan={state.get('plan')}")
     plan : Plan = state['plan']
     debug_print(f"LLM call: architect_agent -> with_structured_output(TaskPlan) with plan={plan}")
-    response = llm.with_structured_output(TaskPlan).invoke(architect_prompt(plan))
+    response = llm.with_structured_output(TaskPlan, method="json_mode").invoke(architect_prompt(plan))
     debug_print(f"LLM response: architect_agent -> {response}")
 
     if response is None:
