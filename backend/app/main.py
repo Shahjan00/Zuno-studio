@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from agent.tools import PROJECT_ROOT, safe_path_for_project
-from app.db import init_db, new_conversation_id
+from app.db import Conversation, Message, SessionLocal, init_db, new_conversation_id
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,17 @@ def chat(request: ChatRequest) -> dict:
     if not _valid_conversation_id(conversation_id):
         raise HTTPException(status_code=422, detail="Invalid conversation id.")
 
+    db = SessionLocal()
+    try:
+        conversation = db.get(Conversation, conversation_id)
+        if conversation is None:
+            conversation = Conversation(id=conversation_id, title=prompt[:60])
+            db.add(conversation)
+        db.add(Message(conversation_id=conversation_id, role="user", content=prompt))
+        db.commit()
+    finally:
+        db.close()
+
     try:
         # Load the model-backed graph on demand so health checks and /docs work
         # before a provider key has been configured.
@@ -109,17 +120,22 @@ def chat(request: ChatRequest) -> dict:
         ) from exc
 
     if result.get("reply"):
-        return {
-            "message": result["reply"],
-            "project": None,
-            "files": _list_project_files(conversation_id),
-            "conversation_id": conversation_id,
-        }
+        reply_text = result["reply"]
+        project_name = None
+    else:
+        plan = result.get("plan")
+        project_name = getattr(plan, "name", None)
+        reply_text = f"Finished building {project_name}." if project_name else "Build complete."
 
-    plan = result.get("plan")
-    project_name = getattr(plan, "name", None)
+    db = SessionLocal()
+    try:
+        db.add(Message(conversation_id=conversation_id, role="assistant", content=reply_text))
+        db.commit()
+    finally:
+        db.close()
+
     return {
-        "message": f"Finished building {project_name}." if project_name else "Build complete.",
+        "message": reply_text,
         "project": project_name,
         "files": _list_project_files(conversation_id),
         "conversation_id": conversation_id,
