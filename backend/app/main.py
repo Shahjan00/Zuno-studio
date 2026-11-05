@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from agent.tools import PROJECT_ROOT, safe_path_for_project
+from app.db import init_db
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,8 @@ app = FastAPI(
     version="0.1.0",
 )
 PROJECT_ROOT.mkdir(parents=True, exist_ok=True)
+
+init_db()
 
 allowed_origins = [
     origin.strip()

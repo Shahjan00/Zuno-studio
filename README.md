@@ -43,6 +43,8 @@ npm run dev
 
 Open http://localhost:5173, describe a website, and watch it build. API docs: http://127.0.0.1:8000/docs.
 
+Conversations are stored in `backend/zuno.db` by default; set `DATABASE_URL` to use Postgres instead.
+
 ## API
 
 - `POST /api/chat` with `{"prompt": "Build a portfolio website"}` runs the agent.
