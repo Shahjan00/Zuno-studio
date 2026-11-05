@@ -52,10 +52,8 @@ def router_agent(state: dict) -> dict:
         f"User input: {user_prompt}"
     )
     debug_print(f"LLM call: router_agent -> classify prompt '{user_prompt}'")
-    # FIX 2: json_mode instead of function calling. gpt-oss-20b sometimes
-    # answers with plain text instead of a tool call, and Groq rejects that
-    # with 400 "Tool choice is required, but model did not call a tool".
-    response = llm.with_structured_output(RouteDecision, method="json_mode").invoke(classification_prompt)
+    # JSON schema mode: sends the real schema, no tool call needed.
+    response = llm.with_structured_output(RouteDecision, method="json_schema", strict=True).invoke(classification_prompt)
     debug_print(f"Router classification: route={response.route}, reason={response.reason}")
     return {
         "route": response.route,
@@ -90,8 +88,8 @@ def planner_agent(state : dict) -> dict :
     debug_print(f"Node planner_agent started with state keys={list(state.keys())}")
     user_prompt = state['user_prompt']
     debug_print(f"LLM call: planner_agent -> with_structured_output(Plan) with prompt={user_prompt}")
-    # FIX 2 (same as router): json_mode, no forced tool call.
-    response = llm.with_structured_output(Plan, method="json_mode").invoke(planner_prompt(user_prompt))
+    # JSON schema mode (same as router).
+    response = llm.with_structured_output(Plan, method="json_schema", strict=True).invoke(planner_prompt(user_prompt))
     debug_print(f"LLM response: planner_agent -> {response}")
 
     if response is None:
@@ -105,8 +103,8 @@ def architect_agent(state : dict) -> dict:
     debug_print(f"Node architect_agent started with plan={state.get('plan')}")
     plan : Plan = state['plan']
     debug_print(f"LLM call: architect_agent -> with_structured_output(TaskPlan) with plan={plan}")
-    # FIX 2 (same as router): json_mode, no forced tool call.
-    response = llm.with_structured_output(TaskPlan, method="json_mode").invoke(architect_prompt(plan))
+    # JSON schema mode (same as router).
+    response = llm.with_structured_output(TaskPlan, method="json_schema", strict=True).invoke(architect_prompt(plan))
     debug_print(f"LLM response: architect_agent -> {response}")
 
     if response is None:
