@@ -44,7 +44,7 @@ def get_current_directory() -> str:
     return str(PROJECT_ROOT)
 
 @tool
-def list_files(directory: str = ".") -> str:
+def list_file(directory: str = ".") -> str:
     """Lists all files in the specified directory within the project root."""
     p = safe_path_for_project(directory)
     if not p.is_dir():
