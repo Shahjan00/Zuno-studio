@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -149,6 +150,64 @@ def chat(request: ChatRequest) -> dict:
         "files": _list_project_files(conversation_id),
         "conversation_id": conversation_id,
     }
+
+
+class ConversationSummary(BaseModel):
+    id: str
+    title: str
+    created_at: datetime
+
+
+class ConversationMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ConversationDetail(BaseModel):
+    id: str
+    title: str
+    messages: list[ConversationMessage]
+    files: list[GeneratedFile]
+
+
+@app.get("/api/conversations", response_model=list[ConversationSummary])
+def list_conversations() -> list[ConversationSummary]:
+    """List past conversations, newest first."""
+    db = SessionLocal()
+    try:
+        rows = db.query(Conversation).order_by(Conversation.created_at.desc()).all()
+        return [
+            ConversationSummary(id=row.id, title=row.title, created_at=row.created_at)
+            for row in rows
+        ]
+    finally:
+        db.close()
+
+
+@app.get("/api/conversations/{conversation_id}", response_model=ConversationDetail)
+def get_conversation(conversation_id: str) -> ConversationDetail:
+    """One conversation with its messages and files."""
+    if not _valid_conversation_id(conversation_id):
+        raise HTTPException(status_code=422, detail="Invalid conversation id.")
+    db = SessionLocal()
+    try:
+        conversation = db.get(Conversation, conversation_id)
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found.")
+        rows = (
+            db.query(Message)
+            .filter(Message.conversation_id == conversation_id)
+            .order_by(Message.id)
+            .all()
+        )
+        return ConversationDetail(
+            id=conversation.id,
+            title=conversation.title,
+            messages=[ConversationMessage(role=row.role, content=row.content) for row in rows],
+            files=_list_project_files(conversation_id),
+        )
+    finally:
+        db.close()
 
 
 @app.get("/api/files", response_model=list[GeneratedFile])
