@@ -11,6 +11,12 @@ type GeneratedFile = {
   size: number
 }
 
+type Conversation = {
+  id: string
+  title: string
+  created_at: string
+}
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
 
 function App() {
@@ -18,9 +24,25 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [files, setFiles] = useState<GeneratedFile[]>([])
   const [previewUrl, setPreviewUrl] = useState('')
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const [isBuilding, setIsBuilding] = useState(false)
   const [error, setError] = useState('')
   const conversationRef = useRef<HTMLDivElement>(null)
+
+  async function refreshConversations() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/conversations`)
+      if (!response.ok) return
+      setConversations((await response.json()) as Conversation[])
+    } catch {
+      // The list simply stays empty if the backend is unavailable.
+    }
+  }
+
+  useEffect(() => {
+    void refreshConversations()
+  }, [])
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/files`)
@@ -57,19 +79,22 @@ function App() {
       const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: nextPrompt }),
+        body: JSON.stringify({ prompt: nextPrompt, conversation_id: conversationId }),
       })
       const data = await response.json()
       if (!response.ok) {
         throw new Error(data.detail || 'The build request failed.')
       }
 
+      const newConversationId = (data.conversation_id as string | undefined) || conversationId
+      if (newConversationId) setConversationId(newConversationId)
       const generatedFiles = (data.files || []) as GeneratedFile[]
       setFiles(generatedFiles)
       setMessages((current) => [...current, { role: 'assistant', text: data.message || 'Your website is ready.' }])
       if (generatedFiles.some((file) => file.path === 'index.html')) {
-        setPreviewUrl(`${API_BASE_URL}/preview/?refresh=${Date.now()}`)
+        setPreviewUrl(newConversationId ? `${API_BASE_URL}/preview/${newConversationId}/?refresh=${Date.now()}` : `${API_BASE_URL}/preview/?refresh=${Date.now()}`)
       }
+      void refreshConversations()
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Could not reach the backend.'
       setError(message)
@@ -77,6 +102,34 @@ function App() {
     } finally {
       setIsBuilding(false)
     }
+  }
+
+  async function loadConversation(id: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/conversations/${id}`)
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.detail || 'Could not open that conversation.')
+      }
+      setConversationId(data.id as string)
+      setMessages(((data.messages || []) as { role: 'user' | 'assistant'; content: string }[]).map((message) => ({ role: message.role, text: message.content })))
+      const generatedFiles = (data.files || []) as GeneratedFile[]
+      setFiles(generatedFiles)
+      setPreviewUrl(generatedFiles.some((file) => file.path === 'index.html') ? `${API_BASE_URL}/preview/${data.id}/?refresh=${Date.now()}` : '')
+      setError('')
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Could not open that conversation.'
+      setError(message)
+    }
+  }
+
+  function newConversation() {
+    setConversationId(null)
+    setMessages([])
+    setFiles([])
+    setPreviewUrl('')
+    setError('')
+    setPrompt('')
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -102,6 +155,27 @@ function App() {
               <h1>Conversation</h1>
             </div>
             <span className="file-count"><span className="file-count-dot" />{files.length} {files.length === 1 ? 'file' : 'files'}</span>
+          </div>
+
+          <div className="history">
+            <div className="history-header">
+              <span>Past builds</span>
+              <button className="history-new" type="button" onClick={newConversation}>+ New</button>
+            </div>
+            {conversations.length === 0 ? (
+              <p className="history-empty">No past builds yet.</p>
+            ) : (
+              conversations.map((conversation) => (
+                <button
+                  key={conversation.id}
+                  className={`history-item${conversation.id === conversationId ? ' history-item-active' : ''}`}
+                  type="button"
+                  onClick={() => void loadConversation(conversation.id)}
+                >
+                  {conversation.title}
+                </button>
+              ))
+            )}
           </div>
 
           <div className="conversation" ref={conversationRef} aria-live="polite">
@@ -155,7 +229,7 @@ function App() {
             <div className="preview-heading">Preview</div>
             <div className="preview-address">/ generated site</div>
             {previewUrl ? (
-              <button className="refresh-button" aria-label="Refresh preview" onClick={() => setPreviewUrl(`${API_BASE_URL}/preview/?refresh=${Date.now()}`)}>↻</button>
+              <button className="refresh-button" aria-label="Refresh preview" onClick={() => setPreviewUrl(conversationId ? `${API_BASE_URL}/preview/${conversationId}/?refresh=${Date.now()}` : `${API_BASE_URL}/preview/?refresh=${Date.now()}`)}>↻</button>
             ) : <span className="toolbar-spacer" />}
           </div>
           {previewUrl ? (

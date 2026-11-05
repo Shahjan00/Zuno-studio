@@ -71,3 +71,13 @@
   .topbar-label { font-size: 10px; }
   .composer-footer > span { font-size: 8px; }
 }
+
+.history { padding: 12px 18px; border-bottom: 1px solid #2b2e28; }
+.history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.history-header > span { color: #85897d; font-size: 9px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.history-new { padding: 4px 8px; border: 1px solid #3a3e34; border-radius: 4px; color: #c1cc9d; background: transparent; font-size: 10px; cursor: pointer; }
+.history-new:hover { border-color: #747d5d; }
+.history-empty { margin: 0; color: #70746a; font-size: 11px; }
+.history-item { display: block; width: 100%; padding: 7px 0; border: 0; color: #d5d7cd; background: transparent; text-align: left; font-size: 11px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-item:hover { color: #f0f0e9; }
+.history-item-active { color: #c1cc9d; }
